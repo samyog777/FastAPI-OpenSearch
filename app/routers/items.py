@@ -5,6 +5,7 @@ from app.schemas.item import ItemCreate, ItemUpdate, Item
 
 router = APIRouter()
 
+
 @router.post("/", response_model=Item, status_code=status.HTTP_201_CREATED)
 async def create_item(item: ItemCreate):
     item_id = str(uuid.uuid4())
@@ -62,18 +63,11 @@ async def search_items(query: str = None, page: int = 1, size: int = 10):
             "from": from_,
             "size": size,
             "query": {
-                "multi_match": {
-                    "query": query,
-                    "fields": ["name", "description"]
-                }
-            }
+                "multi_match": {"query": query, "fields": ["name", "description"]}
+            },
         }
     else:
-        search_query = {
-            "from": from_,
-            "size": size,
-            "query": {"match_all": {}}
-        }
+        search_query = {"from": from_, "size": size, "query": {"match_all": {}}}
 
     response = await item_service.search_documents(search_query)
     total_hits = response["hits"]["total"]["value"]
@@ -85,5 +79,5 @@ async def search_items(query: str = None, page: int = 1, size: int = 10):
         "items_returned": len(items),
         "total_items": total_hits,
         "items": items,
-        "more_items_available": max(0, total_hits - (page * size))
+        "more_items_available": max(0, total_hits - (page * size)),
     }

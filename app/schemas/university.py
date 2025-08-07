@@ -1,9 +1,11 @@
 from pydantic import BaseModel
 from typing import Optional
 
+
 class SaveResult(BaseModel):
     total_fetched: int
     total_saved: int
+
 
 class UniversityCreate(BaseModel):
     web_pages: list[str]
@@ -13,6 +15,7 @@ class UniversityCreate(BaseModel):
     country: str
     alpha_two_code: str
 
+
 class UniversityUpdate(BaseModel):
     web_pages: Optional[list[str]] = None
     state_province: Optional[str] = None
@@ -20,7 +23,7 @@ class UniversityUpdate(BaseModel):
     domains: Optional[list[str]] = None
     country: Optional[str] = None
     alpha_two_code: Optional[str] = None
-    
+
 
 class University(UniversityCreate):
     id: str

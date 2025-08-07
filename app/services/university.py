@@ -1,5 +1,6 @@
 from app.services.base_opensearch import BaseOpenSearchService
 
+
 class UniversityService(BaseOpenSearchService):
     def __init__(self):
         mappings = {
@@ -8,8 +9,9 @@ class UniversityService(BaseOpenSearchService):
             "state_province": {"type": "text"},
             "domains": {"type": "text"},
             "web_pages": {"type": "text"},
-            "alpha_two_code": {"type": "text"}
+            "alpha_two_code": {"type": "text"},
         }
         super().__init__(index_name="universities", mappings=mappings)
+
 
 university_service = UniversityService()
