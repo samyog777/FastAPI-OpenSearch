@@ -1,0 +1,147 @@
+import uuid
+from fastapi import APIRouter, HTTPException, status
+from starlette.status import HTTP_404_NOT_FOUND
+from app.External.university_data import fetch_universities_from_api
+from app.services.university import university_service
+from app.schemas.university import UniversityCreate, UniversityUpdate, University
+from app.External.university_data import fetch_universities_from_api, save_university_to_opensearch, fetch_and_save_universities
+
+router = APIRouter()
+
+@router.post("/", response_model=University, status_code=status.HTTP_201_CREATED)
+async def create_university(university: UniversityCreate):
+    university_id = str(uuid.uuid4())
+    document = university.model_dump()
+    response = await university_service.create_document(document, university_id)
+
+    if response.get("result") != "created":
+        raise HTTPException(status_code=500, detail="Failed to create university")
+
+    return University(id=university_id, **document)
+
+@router.get("/{country}", response_model=list[University])
+async def get_universities_by_country_or_fetch_external(country: str):
+    response = await university_service.search_documents({"query": {"match": {"country": country}}})
+    hits = response["hits"]["hits"]
+    universities = [University(id=hit["_id"], **hit["_source"]) for hit in hits]
+    if not universities:
+        external_unis = await fetch_universities_from_api(country)
+        await save_university_to_opensearch(external_unis)
+
+        # Search again after saving
+        response = await university_service.search_documents({"query": {"match": {"country": country}}})
+        hits = response["hits"]["hits"]
+        universities = [University(id=hit["_id"], **hit["_source"]) for hit in hits]
+
+    return universities
+
+@router.get("/{university_id}", response_model=University)
+async def read_university(university_id: str):
+    document = await university_service.get_document(university_id)
+    if not document or not document.get("found"):
+        raise HTTPException(status_code=404, detail="University not found")
+
+    return University(id=university_id, **document["_source"])
+
+@router.put("/{university_id}", response_model=University)
+async def update_university(university_id: str, university: UniversityUpdate):
+    existing = await university_service.get_document(university_id)
+    if not existing or not existing.get("found"):
+        raise HTTPException(status_code=404, detail="University not found")
+
+    update_data = university.model_dump(exclude_unset=True)
+    response = await university_service.update_document(university_id, update_data)
+
+    if response.get("result") != "updated":
+        raise HTTPException(status_code=500, detail="Failed to update university")
+
+    updated = await university_service.get_document(university_id)
+    return University(id=university_id, **updated["_source"])
+
+@router.delete("/{university_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_university(university_id: str):
+    existing = await university_service.get_document(university_id)
+    if not existing or not existing.get("found"):
+        raise HTTPException(status_code=404, detail="University not found")
+
+    response = await university_service.delete_document(university_id)
+    if response.get("result") != "deleted":
+        raise HTTPException(status_code=500, detail="Failed to delete university")
+
+@router.get("/", response_model=dict)
+async def search_universities(query: str = None, page: int = 1, size: int = 10):
+    try:
+        from_ = (page - 1) * size
+
+        if query:
+            search_query = {
+                "from": from_,
+                "size": size,
+                "query": {
+                    "multi_match": {
+                        "query": query,
+                        "fields": ["name", "description"]
+                    }
+                }
+            }
+        else:
+            search_query = {
+                "from": from_,
+                "size": size,
+                "query": {"match_all": {}}
+            }
+
+        response = await university_service.search_documents(search_query)
+        total_hits = response["hits"]["total"]["value"]
+        hits = response["hits"]["hits"]
+
+        universities = [University(id=hit["_id"], **hit["_source"]) for hit in hits]
+
+        return {
+            "universities_returned": len(universities),
+            "total_universities": total_hits,
+            "universities": universities,
+            "more_universities_available": max(0, total_hits - (page * size))
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# # For External API
+# @router.get("/external-universities")
+# async def fetch_and_show_universities(country: str):
+#     return fetch_universities_from_api(country)
+    
+
+# @router.post("/fetch-and-save-to-opensearch")
+# async def fetch_and_save_universities(country: str):
+#     return fetch_and_save_universities(country)
+
+# async def save_university_to_opensearch(universities: list[dict]) -> int:
+#     save_count = 0
+
+#     for university in universities:
+#         if not university.get("domains"):
+#             continue
+
+#         doc_id = university["domains"][0]
+
+#         doc = {
+#             "web_pages": university.get("web_pages", []),
+#             "state_province": university.get("state_province"),
+#             "name": university.get("name"),
+#             "domain": university.get("domain", []),
+#             "country": university.get("country"),
+#             "alpha_two_code": university.get("alpha_two_code")
+#         }
+
+#         existing = await university_service.get_document(doc_id)
+#         if existing.get("found"):
+#             continue
+
+#         res = await university_service.create_document(doc, doc_id)
+
+#         if res.get("result") == "created":
+#             save_count += 1
+    
+#     return save_count

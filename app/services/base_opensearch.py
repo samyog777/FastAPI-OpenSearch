@@ -4,8 +4,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-class OpenSearchService:
-    def __init__(self):
+class BaseOpenSearchService:
+    def __init__(self, index_name: str, mappings: dict):
+        self.index_name = index_name
+        self.mappings = mappings
         self.client = OpenSearch(
             hosts=[os.getenv("OPENSEARCH_HOST")],
             http_auth=(os.getenv("OPENSEARCH_USER"), os.getenv("OPENSEARCH_PASSWORD")),
@@ -13,7 +15,6 @@ class OpenSearchService:
             verify_certs=os.getenv("OPENSEARCH_VERIFY_CERTS", "false").lower() == "true",
             ssl_show_warn=False
         )
-        self.index_name = os.getenv("OPENSEARCH_INDEX", "items")
 
     async def create_index(self):
         if not self.client.indices.exists(index=self.index_name):
@@ -25,12 +26,7 @@ class OpenSearchService:
                     }
                 },
                 "mappings": {
-                    "properties": {
-                        "name": {"type": "text"},
-                        "description": {"type": "text"},
-                        "price": {"type": "float"},
-                        "in_stock": {"type": "boolean"}
-                    }
+                    "properties": self.mappings
                 }
             }
             self.client.indices.create(index=self.index_name, body=index_body)
@@ -72,5 +68,3 @@ class OpenSearchService:
             index=self.index_name,
             body=query
         )
-
-opensearch_service = OpenSearchService()
