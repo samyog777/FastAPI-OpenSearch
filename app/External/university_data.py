@@ -6,7 +6,7 @@ from app.schemas.university import SaveResult
 
 router = APIRouter()
 
-# @router.get("/external-universities")
+@router.get("/external-universities")
 async def fetch_universities_from_api(country: str) -> list[dict]:
     url = f"http://universities.hipolabs.com/search?country={country}"
     async with httpx.AsyncClient() as client:
